@@ -1,4 +1,5 @@
 import streamlit as st
+from pawpal_system import Owner, Pet, Task
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
@@ -38,16 +39,68 @@ At minimum, your system should:
 
 st.divider()
 
-st.subheader("Quick Demo Inputs (UI only)")
-owner_name = st.text_input("Owner name", value="Jordan")
-pet_name = st.text_input("Pet name", value="Mochi")
-species = st.selectbox("Species", ["dog", "cat", "other"])
+# ---------------------------------------------------------------------------
+# Session state — initialize once, persist across reruns
+# ---------------------------------------------------------------------------
+# st.session_state works like a dictionary that survives page refreshes.
+# The "not in" check means we only create these objects the first time;
+# on every subsequent rerun Streamlit reuses the existing instances.
 
-st.markdown("### Tasks")
-st.caption("Add a few tasks. In your final version, these should feed into your scheduler.")
+if "owner" not in st.session_state:
+    st.session_state.owner = Owner(name="Jordan", available_minutes=60)
 
-if "tasks" not in st.session_state:
-    st.session_state.tasks = []
+if "pet" not in st.session_state:
+    st.session_state.pet = Pet(name="Mochi", species="dog", age=3)
+    st.session_state.owner.add_pet(st.session_state.pet)
+
+# ---------------------------------------------------------------------------
+# Owner info
+# ---------------------------------------------------------------------------
+st.subheader("Owner Info")
+
+owner_name = st.text_input("Owner name", value=st.session_state.owner.name)
+available = st.number_input("Available time (minutes)", min_value=10, max_value=480,
+                            value=st.session_state.owner.available_minutes)
+
+if st.button("Save owner"):
+    # Directly update the persisted Owner object's attributes
+    st.session_state.owner.name = owner_name
+    st.session_state.owner.available_minutes = available
+    st.success(f"Saved! {owner_name} has {available} minutes available today.")
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Add a new pet — wired to owner.add_pet()
+# ---------------------------------------------------------------------------
+st.subheader("Add / Switch Pet")
+st.caption("Creates a new Pet and registers it with the owner via `owner.add_pet()`.")
+
+col_b1, col_b2, col_b3 = st.columns(3)
+with col_b1:
+    new_pet_name = st.text_input("Pet name", value="Mochi")
+with col_b2:
+    new_species = st.selectbox("Species", ["dog", "cat", "other"])
+with col_b3:
+    new_age = st.number_input("Age", min_value=0, max_value=30, value=3)
+
+if st.button("Add / switch pet"):
+    # owner.add_pet() is the single method responsible for linking a Pet to an Owner
+    new_pet = Pet(name=new_pet_name, species=new_species, age=int(new_age))
+    st.session_state.owner.add_pet(new_pet)   # <-- wired to Owner.add_pet()
+    st.session_state.pet = new_pet
+    st.success(f"Pet '{new_pet_name}' added and set as the active pet.")
+
+# Show which pet is currently active
+active = st.session_state.pet
+st.info(f"Active pet: **{active.name}** ({active.species}, age {active.age})")
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Tasks — wired to pet.get_tasks() for display, Task() for creation
+# ---------------------------------------------------------------------------
+st.subheader("Tasks")
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -58,31 +111,35 @@ with col3:
     priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
 
 if st.button("Add task"):
-    st.session_state.tasks.append(
-        {"title": task_title, "duration_minutes": int(duration), "priority": priority}
+    new_task = Task(
+        title=task_title,
+        duration_minutes=int(duration),
+        priority=priority,
+        category="general",
     )
+    # Append via the pet's own task list (returned by pet.get_tasks())
+    st.session_state.pet.get_tasks().append(new_task)
+    st.success(f"Task '{task_title}' added to {st.session_state.pet.name}.")
 
-if st.session_state.tasks:
-    st.write("Current tasks:")
-    st.table(st.session_state.tasks)
+# pet.get_tasks() is the method that exposes the task list to the UI
+current_tasks = st.session_state.pet.get_tasks()
+if current_tasks:
+    st.write(f"Tasks for **{st.session_state.pet.name}**:")
+    st.table([
+        {"title": t.title, "duration_minutes": t.duration_minutes, "priority": t.priority}
+        for t in current_tasks
+    ])
 else:
     st.info("No tasks yet. Add one above.")
 
 st.divider()
 
+# ---------------------------------------------------------------------------
+# Schedule generation — wired to owner.get_schedule()
+# ---------------------------------------------------------------------------
 st.subheader("Build Schedule")
-st.caption("This button should call your scheduling logic once you implement it.")
 
 if st.button("Generate schedule"):
-    st.warning(
-        "Not implemented yet. Next step: create your scheduling logic (classes/functions) and call it here."
-    )
-    st.markdown(
-        """
-Suggested approach:
-1. Design your UML (draft).
-2. Create class stubs (no logic).
-3. Implement scheduling behavior.
-4. Connect your scheduler here and display results.
-"""
-    )
+    # owner.get_schedule() internally creates a Scheduler and returns a DailySchedule
+    schedule = st.session_state.owner.get_schedule()
+    st.markdown(schedule.explain())
