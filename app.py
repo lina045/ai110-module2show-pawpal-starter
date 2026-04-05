@@ -1,5 +1,5 @@
 import streamlit as st
-from pawpal_system import Owner, Pet, Task
+from pawpal_system import Owner, Pet, Task, Scheduler
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
@@ -98,17 +98,21 @@ st.info(f"Active pet: **{active.name}** ({active.species}, age {active.age})")
 st.divider()
 
 # ---------------------------------------------------------------------------
-# Tasks — wired to pet.get_tasks() for display, Task() for creation
+# Tasks — add tasks, display sorted via Scheduler.rank_tasks()
 # ---------------------------------------------------------------------------
 st.subheader("Tasks")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     task_title = st.text_input("Task title", value="Morning walk")
 with col2:
     duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=20)
 with col3:
     priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
+with col4:
+    start_time = st.number_input("Start time (min from midnight)", min_value=0,
+                                 max_value=1439, value=480,
+                                 help="e.g. 480 = 8:00 am, 720 = 12:00 pm")
 
 if st.button("Add task"):
     new_task = Task(
@@ -116,19 +120,39 @@ if st.button("Add task"):
         duration_minutes=int(duration),
         priority=priority,
         category="general",
+        start_time=int(start_time),
     )
-    # Append via the pet's own task list (returned by pet.get_tasks())
     st.session_state.pet.get_tasks().append(new_task)
     st.success(f"Task '{task_title}' added to {st.session_state.pet.name}.")
 
-# pet.get_tasks() is the method that exposes the task list to the UI
 current_tasks = st.session_state.pet.get_tasks()
+
 if current_tasks:
-    st.write(f"Tasks for **{st.session_state.pet.name}**:")
+    # Use Scheduler.rank_tasks() to display tasks sorted by priority
+    scheduler = Scheduler(st.session_state.owner, st.session_state.pet)
+    ranked = scheduler.rank_tasks()
+
+    st.write(f"Tasks for **{st.session_state.pet.name}** (sorted by priority):")
     st.table([
-        {"title": t.title, "duration_minutes": t.duration_minutes, "priority": t.priority}
-        for t in current_tasks
+        {
+            "Title": t.title,
+            "Duration (min)": t.duration_minutes,
+            "Priority": t.priority,
+            "Start time": f"{t.start_time // 60:02d}:{t.start_time % 60:02d}" if t.start_time is not None else "—",
+        }
+        for t in ranked
     ])
+
+    # Use Scheduler.has_conflicts() to surface time overlap warnings
+    conflicts = scheduler.has_conflicts()
+    if conflicts:
+        for a, b in conflicts:
+            st.warning(
+                f"Conflict: **{a.title}** and **{b.title}** overlap in time. "
+                f"Consider adjusting their start times."
+            )
+    else:
+        st.success("No scheduling conflicts detected.")
 else:
     st.info("No tasks yet. Add one above.")
 
@@ -140,6 +164,30 @@ st.divider()
 st.subheader("Build Schedule")
 
 if st.button("Generate schedule"):
-    # owner.get_schedule() internally creates a Scheduler and returns a DailySchedule
     schedule = st.session_state.owner.get_schedule()
-    st.markdown(schedule.explain())
+
+    if schedule.scheduled_tasks:
+        st.success(f"Scheduled {len(schedule.scheduled_tasks)} task(s) — "
+                   f"{schedule.total_minutes} min of {st.session_state.owner.available_minutes} min used.")
+        st.table([
+            {
+                "Title": t.title,
+                "Duration (min)": t.duration_minutes,
+                "Priority": t.priority,
+            }
+            for t in schedule.scheduled_tasks
+        ])
+    else:
+        st.warning("No tasks could be scheduled. Try adding tasks or increasing available time.")
+
+    if schedule.skipped_tasks:
+        with st.expander(f"Skipped tasks ({len(schedule.skipped_tasks)})"):
+            st.table([
+                {
+                    "Title": t.title,
+                    "Duration (min)": t.duration_minutes,
+                    "Priority": t.priority,
+                }
+                for t in schedule.skipped_tasks
+            ])
+            st.caption("These tasks were skipped because they didn't fit within the available time.")

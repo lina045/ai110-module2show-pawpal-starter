@@ -3,9 +3,22 @@
 ## 1. System Design
 
 **a. Initial design**
+three core actions: 
+* Let a user enter basic owner + pet info
+* Let a user add/edit tasks (duration + priority at minimum)
+* Generate a daily schedule/plan based on constraints and priorities
 
 - Briefly describe your initial UML design.
+* An owner has a pet, a pet has a task, the scheduler reads all of that and produces a daily schedule, the scheduler will contain the core logic 
 - What classes did you include, and what responsibilities did you assign to each?
+* This design is built around five separate classes,
+    * the owner: contains the owners's info and how much time they have available
+    * the pet: contains the pet's basic info and list of care tasks
+    * the task: represents a single care activity with duration and priority 
+    * the scheduler: takes the owner & pet and ranks tasks by priority fitting in as many as possible into the available time that the owner has
+    * the dailyschedule: the output given to the user which contains the chosen tasks, which ones weren't included and why 
+
+
 
 **b. Design changes**
 
