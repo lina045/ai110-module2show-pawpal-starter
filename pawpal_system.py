@@ -12,6 +12,8 @@ class Task:
     priority: str          # "low", "medium", "high"
     category: str          # "walk", "feeding", "meds", "grooming", "enrichment"
     completed: bool = False
+    recur: bool = False    # True = repeats daily
+    start_time: int | None = None  # minutes from midnight, e.g. 480 = 8:00 am
 
     def is_high_priority(self) -> bool:
         """Return True if the task's priority is high."""
@@ -20,6 +22,18 @@ class Task:
     def mark_complete(self) -> None:
         """Mark this task as completed."""
         self.completed = True
+
+    def next_occurrence(self) -> "Task":
+        """Return a fresh copy of this task for the next day (completed reset to False)."""
+        return Task(
+            title=self.title,
+            duration_minutes=self.duration_minutes,
+            priority=self.priority,
+            category=self.category,
+            completed=False,
+            recur=self.recur,
+            start_time=self.start_time,
+        )
 
 
 @dataclass
@@ -110,6 +124,18 @@ class Scheduler:
     def fits_within_time(self, tasks: list[Task], available: int) -> bool:
         """Return True if the total duration of the given tasks fits within available minutes."""
         return sum(t.duration_minutes for t in tasks) <= available
+
+    def has_conflicts(self) -> list[tuple[Task, Task]]:
+        """Return pairs of tasks whose start_time values overlap."""
+        timed = [t for t in self.tasks if t.start_time is not None]
+        conflicts = []
+        for i, a in enumerate(timed):
+            for b in timed[i + 1:]:
+                a_end = a.start_time + a.duration_minutes
+                b_end = b.start_time + b.duration_minutes
+                if a.start_time < b_end and b.start_time < a_end:
+                    conflicts.append((a, b))
+        return conflicts
 
     def build_schedule(self) -> DailySchedule:
         """Greedily select tasks by priority until available time is exhausted."""

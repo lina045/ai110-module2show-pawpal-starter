@@ -32,6 +32,23 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+## Testing PawPal+
+
+### Run the tests
+
+```bash
+source .venv/bin/activate
+python -m pytest tests/ -v
+```
+
+### Confidence Level
+
+★★★★☆ (4/5)
+
+Core scheduling logic (priority sorting, time-fitting, recurrence, and conflict detection) is well covered. Remaining gap: the greedy scheduler skips lower-priority tasks even when they would fit after a larger task is dropped — this edge case is documented but not yet tested.
+
+---
+
 ### Suggested workflow
 
 1. Read the scenario carefully and identify requirements and edge cases.
